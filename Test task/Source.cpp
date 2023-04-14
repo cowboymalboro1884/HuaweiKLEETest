@@ -1,101 +1,79 @@
-﻿#include "std_testcase.h"
+#include "std_testcase.h"
 
-#include <wchar.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <dlfcn.h>
 
-#ifdef _WIN32
-#define FILENAME "C:\\temp\\file.txt"
-#endif
+#define FILENAME "/tmp/file.txt"
 
-#include <windows.h>
-
-
-void CWE114_Process_Control__w32_char_file_01_bad()
-{
-    char* data;
-
+void CWE114_Process_Control__w32_char_file_01_bad() {
+    char *data;
 
     char buff[100] = "";
 
-    HANDLE hFile;
-    DWORD lpNumberOfBytesRead;
+    int fd = open(FILENAME, O_RDONLY);
 
-    hFile = CreateFileA(
-        FILENAME,
-        GENERIC_READ,
-        0, NULL,
-        OPEN_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL);
-
-    if (hFile == INVALID_HANDLE_VALUE)
-    {
-        MessageBox(NULL, TEXT("Cannot open file"), TEXT("Warning"), MB_OK);
+    if (fd == -1) {
+        perror("Cannot open file");
         return;
     }
-    do
-    {
-        ReadFile(
-            hFile,
-            buff, sizeof(buff), &lpNumberOfBytesRead, NULL);
-        if (lpNumberOfBytesRead == 0)
-            break;
 
-    } while (lpNumberOfBytesRead != 0);
+    ssize_t n;
+    do {
+        n = read(fd, buff, sizeof(buff));
+        if (n == -1) {
+            perror("Error reading file");
+            close(fd);
+            return;
+        }
+    } while (n != 0);
 
-    CloseHandle(hFile);
+    close(fd);
 
     data = buff;
 
-
     {
-        HMODULE hModule;
-        /* POTENTIAL FLAW: If the path to the library is not specified, an attacker may be able to
-         * replace his own file with the intended library */
-        hModule = LoadLibraryA(data);
-        if (hModule != NULL)
-        {
-            FreeLibrary(hModule);
+        void *handle;
+        char *error;
+
+        handle = dlopen(data, RTLD_NOW);
+        if (handle != nullptr) {
+            dlclose(handle);
             printf("Library loaded and freed successfully\n");
-        }
-        else
-        {
-            printf("Unable to load library\n");
+        } else {
+            error = dlerror();
+            printf("Unable to load library: %s\n", error);
         }
     }
 }
-
 
 
 /* goodG2B uses the GoodSource with the BadSink */
-static void goodG2B()
-{
-    char* data;
+static void goodG2B() {
+    char *data;
     char dataBuffer[100] = "";
     data = dataBuffer;
     /* FIX: Specify the full pathname for the library */
-    strcpy(data, "C:\\Windows\\System32\\winsrv.dll");
+    strcpy(data, "/lib/x86_64-linux-gnu/libc.so.6");
     {
-        HMODULE hModule;
-        /* POTENTIAL FLAW: If the path to the library is not specified, an attacker may be able to
-         * replace his own file with the intended library */
-        hModule = LoadLibraryA(data);
-        if (hModule != NULL)
-        {
-            FreeLibrary(hModule);
-            printf("Library loaded and freed successfully \n");
+        void *handle;
+        char *error;
+
+        handle = dlopen(data, RTLD_NOW);
+        if (handle != nullptr) {
+            dlclose(handle);
+            printf("Library loaded and freed successfully\n");
+        } else {
+            error = dlerror();
+            printf("Unable to load library: %s\n", error);
         }
-        else
-        {
-            printf("Unable to load library\n");
-        }
+
     }
 }
 
-void CWE114_Process_Control__w32_char_file_01_good()
-{
+void CWE114_Process_Control__w32_char_file_01_good() {
     goodG2B();
 }
-
 
 
 /* Below is the main(). It is only used when building this testcase on
@@ -106,10 +84,9 @@ void CWE114_Process_Control__w32_char_file_01_good()
 
 
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char *argv[]) {
     /* seed randomness */
-    srand((unsigned)time(NULL));
+    srand((unsigned) time(NULL));
     printf("Calling good()... \n");
     CWE114_Process_Control__w32_char_file_01_good();
     printf("Finished good() \n");
@@ -119,4 +96,3 @@ int main(int argc, char* argv[])
     printf("Finished bad() \n");
     return 0;
 }
-
